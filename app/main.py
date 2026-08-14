@@ -3,10 +3,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from app.api.routes.catalog import router as catalog_router
+from app.api.routes.commerce import router as commerce_router
 from app.core.config import settings
 from app.database.base import Base
 from app.database.database import engine, AsyncSessionLocal
 from app.models.product import Product
+from app.models.commerce import Banner, Customer, Order
 
 async def seed_products():
     async with AsyncSessionLocal() as db:
@@ -39,3 +41,4 @@ def root(): return {"message": "Kentank API is running", "version": settings.VER
 def health(): return {"status": "healthy"}
 
 app.include_router(catalog_router)
+app.include_router(commerce_router)
