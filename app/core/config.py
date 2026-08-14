@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     DEBUG: bool = False
     DATABASE_URL: str = "sqlite+aiosqlite:///./kentank.db"
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,https://kentankclient.vercel.app"
     ADMIN_TOKEN: str = "change-me-in-production"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
