@@ -35,10 +35,16 @@ async def seed_products():
         db.add_all(seed)
         await db.commit()
 
+async def migrate_legacy_schema():
+    async with engine.begin() as conn:
+        if engine.dialect.name == 'postgresql':
+            await conn.exec_driver_sql("ALTER TABLE banners ADD COLUMN IF NOT EXISTS placement VARCHAR(40) NOT NULL DEFAULT 'home_hero'")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await migrate_legacy_schema()
     await seed_categories()
     await seed_products()
     yield
