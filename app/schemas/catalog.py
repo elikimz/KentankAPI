@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 class ProductBase(BaseModel):
@@ -13,6 +14,9 @@ class ProductBase(BaseModel):
     image_url: str | None = None
     featured: bool = False
     published: bool = True
+    availability_status: str = Field(default='In stock', max_length=40)
+    variants: list[str] = Field(default_factory=list)
+    specifications: dict[str, Any] = Field(default_factory=dict)
 
 class ProductCreate(ProductBase):
     pass

@@ -39,6 +39,9 @@ async def migrate_legacy_schema():
     async with engine.begin() as conn:
         if engine.dialect.name == 'postgresql':
             await conn.exec_driver_sql("ALTER TABLE banners ADD COLUMN IF NOT EXISTS placement VARCHAR(40) NOT NULL DEFAULT 'home_hero'")
+            await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS availability_status VARCHAR(40) NOT NULL DEFAULT 'In stock'")
+            await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS variants_json TEXT NOT NULL DEFAULT '[]'")
+            await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS specifications_json TEXT NOT NULL DEFAULT '{}'")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
