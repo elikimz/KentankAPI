@@ -68,3 +68,15 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(30), default='pending')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Contact(Base):
+    __tablename__ = 'contacts'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(100))
+    contact_type: Mapped[str] = mapped_column(String(20), index=True)
+    value: Mapped[str] = mapped_column(String(220))
+    display_value: Mapped[str | None] = mapped_column(String(220), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

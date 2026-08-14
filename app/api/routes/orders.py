@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.database.database import get_async_db
-from app.models.commerce import Customer, Order
+from app.models.commerce import Contact, Customer, Order
 from app.models.product import Product
 from app.services.auth import decode_token
 
@@ -26,6 +26,14 @@ class OrderCreate(BaseModel):
 class OrderStatusUpdate(BaseModel):
     status: str = Field(pattern=r'^(pending|confirmed|processing|ready|completed|cancelled)$')
 
+class ContactPayload(BaseModel):
+    label: str = Field(min_length=1, max_length=100)
+    contact_type: str = Field(pattern=r'^(phone|whatsapp|sms|email)$')
+    value: str = Field(min_length=3, max_length=220)
+    display_value: str | None = Field(default=None, max_length=220)
+    active: bool = True
+    sort_order: int = 0
+
 def token_payload(authorization: str | None, role: str | None = None):
     if not authorization or not authorization.lower().startswith('bearer '):
         return None
@@ -40,6 +48,44 @@ def require_admin(authorization: str | None = Header(default=None)):
 @router.get('/business')
 def business_settings():
     return {'email': settings.BUSINESS_EMAIL, 'phone': settings.BUSINESS_PHONE, 'whatsapp': settings.WHATSAPP_NUMBER, 'location': settings.BUSINESS_LOCATION}
+
+@router.get('/contacts')
+async def public_contacts(db: AsyncSession = Depends(get_async_db)):
+    contacts = list((await db.scalars(select(Contact).where(Contact.active.is_(True)).order_by(Contact.sort_order.asc(), Contact.created_at.asc()))).all())
+    return [{'id': item.id, 'label': item.label, 'contact_type': item.contact_type, 'value': item.value, 'display_value': item.display_value, 'active': item.active, 'sort_order': item.sort_order} for item in contacts]
+
+@router.get('/admin/contacts', dependencies=[Depends(require_admin)])
+async def admin_contacts(db: AsyncSession = Depends(get_async_db)):
+    contacts = list((await db.scalars(select(Contact).order_by(Contact.sort_order.asc(), Contact.created_at.asc()))).all())
+    return [{'id': item.id, 'label': item.label, 'contact_type': item.contact_type, 'value': item.value, 'display_value': item.display_value, 'active': item.active, 'sort_order': item.sort_order} for item in contacts]
+
+@router.post('/admin/contacts', status_code=201, dependencies=[Depends(require_admin)])
+async def create_contact(payload: ContactPayload, db: AsyncSession = Depends(get_async_db)):
+    contact = Contact(**payload.model_dump())
+    db.add(contact)
+    await db.commit()
+    await db.refresh(contact)
+    return {'id': contact.id, **payload.model_dump()}
+
+@router.put('/admin/contacts/{contact_id}', dependencies=[Depends(require_admin)])
+async def update_contact(contact_id: int, payload: ContactPayload, db: AsyncSession = Depends(get_async_db)):
+    contact = await db.get(Contact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail='Contact not found')
+    for key, value in payload.model_dump().items():
+        setattr(contact, key, value)
+    await db.commit()
+    await db.refresh(contact)
+    return {'id': contact.id, **payload.model_dump()}
+
+@router.delete('/admin/contacts/{contact_id}', dependencies=[Depends(require_admin)])
+async def delete_contact(contact_id: int, db: AsyncSession = Depends(get_async_db)):
+    contact = await db.get(Contact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail='Contact not found')
+    await db.delete(contact)
+    await db.commit()
+    return {'deleted': True, 'id': contact_id}
 
 @router.post('/orders', status_code=201)
 async def create_order(payload: OrderCreate, authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_async_db)):

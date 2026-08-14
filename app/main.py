@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.database.base import Base
 from app.database.database import engine, AsyncSessionLocal
 from app.models.product import Product
-from app.models.commerce import AdminUser, Banner, Category, Customer, Order, ProductImage
+from app.models.commerce import AdminUser, Banner, Category, Contact, Customer, Order, ProductImage
 from app.services.auth import hash_password
 
 async def seed_admin():
