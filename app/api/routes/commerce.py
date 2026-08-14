@@ -37,10 +37,12 @@ class CloudinarySignature(BaseModel):
     signature: str
 
 class ProductImagePayload(BaseModel):
+    id: int | None = None
     image_url: str = Field(min_length=10, max_length=500)
     alt_text: str = 'Kentank product image'
     sort_order: int = 0
     is_primary: bool = False
+    model_config = {'from_attributes': True}
 
 class CategoryPayload(BaseModel):
     name: str = Field(min_length=2, max_length=100)
@@ -70,7 +72,11 @@ async def add_product_image(product_id: int, payload: ProductImagePayload, db: A
         images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
         for image in images: image.is_primary = False
     image = ProductImage(product_id=product_id, **payload.model_dump())
-    db.add(image); await db.commit(); await db.refresh(image)
+    db.add(image)
+    if image.is_primary:
+        product = await db.get(Product, product_id)
+        product.image_url = image.image_url
+    await db.commit(); await db.refresh(image)
     return image
 
 @router.put('/admin/products/{product_id}/images/{image_id}', response_model=ProductImagePayload, dependencies=[Depends(require_admin)])
@@ -81,6 +87,9 @@ async def update_product_image(product_id: int, image_id: int, payload: ProductI
         images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
         for item in images: item.is_primary = False
     for key, value in payload.model_dump().items(): setattr(image, key, value)
+    if image.is_primary:
+        product = await db.get(Product, product_id)
+        product.image_url = image.image_url
     await db.commit(); await db.refresh(image)
     return image
 
@@ -88,7 +97,17 @@ async def update_product_image(product_id: int, image_id: int, payload: ProductI
 async def delete_product_image(product_id: int, image_id: int, db: AsyncSession = Depends(get_async_db)):
     image = await db.get(ProductImage, image_id)
     if not image or image.product_id != product_id: raise HTTPException(status_code=404, detail='Image not found')
-    await db.delete(image); await db.commit()
+    product = await db.get(Product, product_id)
+    was_primary = image.is_primary
+    await db.delete(image)
+    if was_primary and product:
+        replacement = await db.scalar(select(ProductImage).where(ProductImage.product_id == product_id, ProductImage.id != image_id).order_by(ProductImage.sort_order.asc()))
+        if replacement:
+            replacement.is_primary = True
+            product.image_url = replacement.image_url
+        else:
+            product.image_url = None
+    await db.commit()
 
 @router.get('/categories', response_model=list[CategoryPayload])
 async def list_categories(db: AsyncSession = Depends(get_async_db)):
