@@ -56,6 +56,9 @@ async def migrate_legacy_schema():
             await conn.exec_driver_sql("UPDATE products SET original_price = price WHERE original_price IS NULL")
             await conn.exec_driver_sql("UPDATE products SET discounted_price = price WHERE discounted_price IS NULL")
             await conn.exec_driver_sql("ALTER TABLE product_images ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE")
+            await conn.exec_driver_sql("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_reference VARCHAR(30)")
+            await conn.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_order_reference ON orders(order_reference)")
+            await conn.exec_driver_sql("UPDATE orders SET order_reference = 'KT-' || EXTRACT(YEAR FROM created_at)::text || '-' || LPAD(id::text, 4, '0') WHERE order_reference IS NULL")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

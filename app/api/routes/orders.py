@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -107,7 +108,10 @@ async def create_order(payload: OrderCreate, authorization: str | None = Header(
     db.add(order)
     await db.commit()
     await db.refresh(order)
-    return {'id': order.id, 'status': order.status, 'total': str(order.total), 'items': lines, 'created_at': order.created_at}
+    order.order_reference = f"KT-{order.created_at.year}-{order.id:04d}"
+    await db.commit()
+    await db.refresh(order)
+    return {'id': order.id, 'order_reference': order.order_reference, 'status': order.status, 'total': str(order.total), 'items': lines, 'created_at': order.created_at}
 
 @router.get('/orders/me')
 async def customer_orders(authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_async_db)):
@@ -115,12 +119,12 @@ async def customer_orders(authorization: str | None = Header(default=None), db: 
     if not payload:
         raise HTTPException(status_code=401, detail='Customer authentication required')
     orders = list((await db.scalars(select(Order).where(Order.customer_id == int(payload['sub'])).order_by(Order.created_at.desc()))).all())
-    return [{'id': order.id, 'status': order.status, 'total': str(order.total), 'items': json.loads(order.items_json), 'created_at': order.created_at, 'delivery_address': order.delivery_address} for order in orders]
+    return [{'id': order.id, 'order_reference': order.order_reference or f"KT-{order.created_at.year}-{order.id:04d}", 'status': order.status, 'total': str(order.total), 'items': json.loads(order.items_json), 'created_at': order.created_at, 'delivery_address': order.delivery_address} for order in orders]
 
 @router.get('/admin/orders', dependencies=[Depends(require_admin)])
 async def admin_orders(db: AsyncSession = Depends(get_async_db)):
     orders = list((await db.scalars(select(Order).order_by(Order.created_at.desc()))).all())
-    return [{'id': order.id, 'status': order.status, 'total': str(order.total), 'items': json.loads(order.items_json), 'customer_name': order.customer_name, 'customer_email': order.customer_email, 'customer_phone': order.customer_phone, 'delivery_address': order.delivery_address, 'created_at': order.created_at} for order in orders]
+    return [{'id': order.id, 'order_reference': order.order_reference or f"KT-{order.created_at.year}-{order.id:04d}", 'status': order.status, 'total': str(order.total), 'items': json.loads(order.items_json), 'customer_name': order.customer_name, 'customer_email': order.customer_email, 'customer_phone': order.customer_phone, 'delivery_address': order.delivery_address, 'created_at': order.created_at} for order in orders]
 
 @router.patch('/admin/orders/{order_id}', dependencies=[Depends(require_admin)])
 async def update_order_status(order_id: int, payload: OrderStatusUpdate, db: AsyncSession = Depends(get_async_db)):
@@ -130,4 +134,4 @@ async def update_order_status(order_id: int, payload: OrderStatusUpdate, db: Asy
     order.status = payload.status
     await db.commit()
     await db.refresh(order)
-    return {'id': order.id, 'status': order.status}
+    return {'id': order.id, 'order_reference': order.order_reference or f"KT-{order.created_at.year}-{order.id:04d}", 'status': order.status}

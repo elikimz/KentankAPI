@@ -58,6 +58,7 @@ class Customer(Base):
 class Order(Base):
     __tablename__ = 'orders'
     id: Mapped[int] = mapped_column(primary_key=True)
+    order_reference: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey('customers.id'), nullable=True)
     customer_name: Mapped[str] = mapped_column(String(120))
     customer_email: Mapped[str] = mapped_column(String(180))
