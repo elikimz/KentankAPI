@@ -12,6 +12,8 @@ class Product(Base):
     capacity_litres: Mapped[int] = mapped_column(nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    original_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    discounted_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     note: Mapped[str] = mapped_column(Text, nullable=False)
     colour: Mapped[str] = mapped_column(String(20), default="#e7dfd0", nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -9,6 +9,10 @@ class ProductBase(BaseModel):
     capacity_litres: int = Field(gt=0)
     category: str = Field(min_length=2, max_length=80)
     price: Decimal = Field(gt=0)
+    original_price: Decimal | None = Field(default=None, gt=0)
+    discounted_price: Decimal | None = Field(default=None, gt=0)
+    discount_amount: Decimal = Decimal('0')
+    discount_percent: Decimal = Decimal('0')
     note: str = Field(min_length=5)
     colour: str = Field(default="#e7dfd0", max_length=20)
     image_url: str | None = None
@@ -26,6 +30,7 @@ class ProductImageRead(BaseModel):
     image_url: str
     alt_text: str
     sort_order: int
+    is_primary: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 class ProductRead(ProductBase):

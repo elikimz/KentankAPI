@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     BUSINESS_EMAIL: str = "hello@kentank.co.ke"
     BUSINESS_PHONE: str = "+254 700 000 000"
     BUSINESS_LOCATION: str = "Nairobi, Kenya"
+    INITIAL_ADMIN_EMAIL: str = "elijahkimani1293@gmail.com"
+    INITIAL_ADMIN_PASSWORD: str = "12345678"
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    CLOUDINARY_FOLDER: str = "kentank/products"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

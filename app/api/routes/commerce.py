@@ -1,10 +1,14 @@
+import hashlib
+import hmac
+import time
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.database.database import get_async_db
-from app.models.commerce import Banner, Category
+from app.models.commerce import Banner, Category, ProductImage
+from app.models.product import Product
 from app.services.auth import decode_token
 
 router = APIRouter(prefix='/api', tags=['commerce'])
@@ -25,12 +29,66 @@ class BannerPayload(BaseModel):
     active: bool = True
     sort_order: int = 0
 
+class CloudinarySignature(BaseModel):
+    cloud_name: str
+    api_key: str
+    timestamp: int
+    folder: str
+    signature: str
+
+class ProductImagePayload(BaseModel):
+    image_url: str = Field(min_length=10, max_length=500)
+    alt_text: str = 'Kentank product image'
+    sort_order: int = 0
+    is_primary: bool = False
+
 class CategoryPayload(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     slug: str = Field(min_length=2, max_length=120, pattern=r'^[a-z0-9-]+$')
     description: str = ''
     active: bool = True
     sort_order: int = 0
+
+@router.post('/admin/uploads/signature', response_model=CloudinarySignature, dependencies=[Depends(require_admin)])
+async def cloudinary_signature():
+    if not settings.CLOUDINARY_CLOUD_NAME or not settings.CLOUDINARY_API_KEY or not settings.CLOUDINARY_API_SECRET:
+        raise HTTPException(status_code=503, detail='Cloudinary is not configured on the server')
+    timestamp = int(time.time())
+    folder = settings.CLOUDINARY_FOLDER
+    params = f'folder={folder}&timestamp={timestamp}'
+    signature = hmac.new(settings.CLOUDINARY_API_SECRET.encode(), params.encode(), hashlib.sha1).hexdigest()
+    return CloudinarySignature(cloud_name=settings.CLOUDINARY_CLOUD_NAME, api_key=settings.CLOUDINARY_API_KEY, timestamp=timestamp, folder=folder, signature=signature)
+
+@router.get('/admin/products/{product_id}/images', response_model=list[ProductImagePayload], dependencies=[Depends(require_admin)])
+async def admin_product_images(product_id: int, db: AsyncSession = Depends(get_async_db)):
+    return list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id).order_by(ProductImage.is_primary.desc(), ProductImage.sort_order.asc()))).all())
+
+@router.post('/admin/products/{product_id}/images', response_model=ProductImagePayload, status_code=201, dependencies=[Depends(require_admin)])
+async def add_product_image(product_id: int, payload: ProductImagePayload, db: AsyncSession = Depends(get_async_db)):
+    if not await db.get(Product, product_id): raise HTTPException(status_code=404, detail='Product not found')
+    if payload.is_primary:
+        images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
+        for image in images: image.is_primary = False
+    image = ProductImage(product_id=product_id, **payload.model_dump())
+    db.add(image); await db.commit(); await db.refresh(image)
+    return image
+
+@router.put('/admin/products/{product_id}/images/{image_id}', response_model=ProductImagePayload, dependencies=[Depends(require_admin)])
+async def update_product_image(product_id: int, image_id: int, payload: ProductImagePayload, db: AsyncSession = Depends(get_async_db)):
+    image = await db.get(ProductImage, image_id)
+    if not image or image.product_id != product_id: raise HTTPException(status_code=404, detail='Image not found')
+    if payload.is_primary:
+        images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
+        for item in images: item.is_primary = False
+    for key, value in payload.model_dump().items(): setattr(image, key, value)
+    await db.commit(); await db.refresh(image)
+    return image
+
+@router.delete('/admin/products/{product_id}/images/{image_id}', status_code=204, dependencies=[Depends(require_admin)])
+async def delete_product_image(product_id: int, image_id: int, db: AsyncSession = Depends(get_async_db)):
+    image = await db.get(ProductImage, image_id)
+    if not image or image.product_id != product_id: raise HTTPException(status_code=404, detail='Image not found')
+    await db.delete(image); await db.commit()
 
 @router.get('/categories', response_model=list[CategoryPayload])
 async def list_categories(db: AsyncSession = Depends(get_async_db)):

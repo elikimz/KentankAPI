@@ -11,6 +11,15 @@ from app.database.base import Base
 from app.database.database import engine, AsyncSessionLocal
 from app.models.product import Product
 from app.models.commerce import AdminUser, Banner, Category, Customer, Order, ProductImage
+from app.services.auth import hash_password
+
+async def seed_admin():
+    async with AsyncSessionLocal() as db:
+        existing = await db.scalar(select(AdminUser).where(AdminUser.email == settings.INITIAL_ADMIN_EMAIL.lower()))
+        if existing:
+            return
+        db.add(AdminUser(email=settings.INITIAL_ADMIN_EMAIL.lower(), full_name='Kentank Administrator', password_hash=hash_password(settings.INITIAL_ADMIN_PASSWORD)))
+        await db.commit()
 
 async def seed_categories():
     async with AsyncSessionLocal() as db:
@@ -42,12 +51,18 @@ async def migrate_legacy_schema():
             await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS availability_status VARCHAR(40) NOT NULL DEFAULT 'In stock'")
             await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS variants_json TEXT NOT NULL DEFAULT '[]'")
             await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS specifications_json TEXT NOT NULL DEFAULT '{}'")
+            await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price NUMERIC(12,2)")
+            await conn.exec_driver_sql("ALTER TABLE products ADD COLUMN IF NOT EXISTS discounted_price NUMERIC(12,2)")
+            await conn.exec_driver_sql("UPDATE products SET original_price = price WHERE original_price IS NULL")
+            await conn.exec_driver_sql("UPDATE products SET discounted_price = price WHERE discounted_price IS NULL")
+            await conn.exec_driver_sql("ALTER TABLE product_images ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await migrate_legacy_schema()
+    await seed_admin()
     await seed_categories()
     await seed_products()
     yield

@@ -14,6 +14,13 @@ router = APIRouter(prefix="/api", tags=["catalog"])
 
 def product_payload(product: Product) -> dict:
     data = ProductRead.model_validate(product).model_dump()
+    original = product.original_price or product.price
+    discounted = product.discounted_price or product.price
+    data['price'] = discounted
+    data['original_price'] = original
+    data['discounted_price'] = discounted
+    data['discount_amount'] = max(original - discounted, 0)
+    data['discount_percent'] = round((max(original - discounted, 0) / original) * 100, 2) if original else 0
     data['availability_status'] = product.availability_status
     data['variants'] = json.loads(product.variants_json or '[]')
     data['specifications'] = json.loads(product.specifications_json or '{}')
@@ -21,6 +28,15 @@ def product_payload(product: Product) -> dict:
 
 def product_values(payload: ProductCreate) -> dict:
     data = payload.model_dump()
+    original = data.get('original_price') or data['price']
+    discounted = data.get('discounted_price') or data['price']
+    if discounted > original:
+        raise HTTPException(status_code=422, detail='Discounted price cannot exceed original price')
+    data.pop('discount_amount', None)
+    data.pop('discount_percent', None)
+    data['price'] = discounted
+    data['original_price'] = original
+    data['discounted_price'] = discounted
     data['variants_json'] = json.dumps(data.pop('variants', []))
     data['specifications_json'] = json.dumps(data.pop('specifications', {}))
     return data
@@ -42,7 +58,7 @@ async def list_products(category: str | None = None, featured: bool | None = Non
 async def get_product(slug: str, db: AsyncSession = Depends(get_async_db)):
     product = await db.scalar(select(Product).where(Product.slug == slug, Product.published.is_(True)))
     if not product: raise HTTPException(status_code=404, detail="Product not found")
-    images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product.id).order_by(ProductImage.sort_order.asc()))).all())
+    images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product.id).order_by(ProductImage.is_primary.desc(), ProductImage.sort_order.asc()))).all())
     related = list((await db.scalars(select(Product).where(Product.category == product.category, Product.id != product.id, Product.published.is_(True)).order_by(Product.featured.desc(), Product.capacity_litres.asc()).limit(4))).all())
     return {**product_payload(product), 'images': images, 'related_products': [product_payload(item) for item in related]}
 
