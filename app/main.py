@@ -3,12 +3,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from app.api.routes.catalog import router as catalog_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.orders import router as orders_router
 from app.api.routes.commerce import router as commerce_router
 from app.core.config import settings
 from app.database.base import Base
 from app.database.database import engine, AsyncSessionLocal
 from app.models.product import Product
-from app.models.commerce import Banner, Customer, Order
+from app.models.commerce import AdminUser, Banner, Category, Customer, Order, ProductImage
+
+async def seed_categories():
+    async with AsyncSessionLocal() as db:
+        existing = await db.scalar(select(Category).limit(1))
+        if existing:
+            return
+        names = [('Water Tanks', 'water-tanks'), ('Accessories', 'accessories'), ('Plumbing Products', 'plumbing-products'), ('Storage Solutions', 'storage-solutions')]
+        db.add_all([Category(name=name, slug=slug, sort_order=index) for index, (name, slug) in enumerate(names)])
+        await db.commit()
 
 async def seed_products():
     async with AsyncSessionLocal() as db:
@@ -28,6 +39,7 @@ async def seed_products():
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await seed_categories()
     await seed_products()
     yield
     await engine.dispose()
@@ -41,4 +53,6 @@ def root(): return {"message": "Kentank API is running", "version": settings.VER
 def health(): return {"status": "healthy"}
 
 app.include_router(catalog_router)
+app.include_router(auth_router)
+app.include_router(orders_router)
 app.include_router(commerce_router)

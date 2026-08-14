@@ -5,13 +5,15 @@ from app.core.config import settings
 from app.database.database import get_async_db
 from app.models.inquiry import Inquiry
 from app.models.product import Product
-from app.schemas.catalog import InquiryCreate, InquiryRead, ProductCreate, ProductRead
+from app.models.commerce import ProductImage
+from app.services.auth import decode_token
+from app.schemas.catalog import InquiryCreate, InquiryRead, ProductCreate, ProductDetailRead, ProductRead
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
-def require_admin(x_admin_token: str | None = Header(default=None)):
-    if not x_admin_token or x_admin_token != settings.ADMIN_TOKEN:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid admin token required")
+def require_admin(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.lower().startswith('bearer ') or not decode_token(authorization.split(' ', 1)[1], 'admin'):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Admin authentication required')
     return True
 
 @router.get("/products", response_model=list[ProductRead])
@@ -22,11 +24,13 @@ async def list_products(category: str | None = None, featured: bool | None = Non
     if q: query = query.where(Product.name.ilike(f"%{q}%"))
     return list((await db.scalars(query)).all())
 
-@router.get("/products/{slug}", response_model=ProductRead)
+@router.get("/products/{slug}", response_model=ProductDetailRead)
 async def get_product(slug: str, db: AsyncSession = Depends(get_async_db)):
     product = await db.scalar(select(Product).where(Product.slug == slug, Product.published.is_(True)))
     if not product: raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product.id).order_by(ProductImage.sort_order.asc()))).all())
+    related = list((await db.scalars(select(Product).where(Product.category == product.category, Product.id != product.id, Product.published.is_(True)).order_by(Product.featured.desc(), Product.capacity_litres.asc()).limit(4))).all())
+    return {**ProductRead.model_validate(product).model_dump(), 'images': images, 'related_products': related}
 
 @router.post("/inquiries", response_model=InquiryRead, status_code=201)
 async def create_inquiry(payload: InquiryCreate, db: AsyncSession = Depends(get_async_db)):

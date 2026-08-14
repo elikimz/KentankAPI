@@ -4,13 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.database.database import get_async_db
-from app.models.commerce import Banner
+from app.models.commerce import Banner, Category
+from app.services.auth import decode_token
 
 router = APIRouter(prefix='/api', tags=['commerce'])
 
-def require_admin(x_admin_token: str | None = Header(default=None)):
-    if not x_admin_token or x_admin_token != settings.ADMIN_TOKEN:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Valid admin token required')
+def require_admin(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.lower().startswith('bearer ') or not decode_token(authorization.split(' ', 1)[1], 'admin'):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Admin authentication required')
     return True
 
 class BannerPayload(BaseModel):
@@ -20,8 +21,53 @@ class BannerPayload(BaseModel):
     image_url: str | None = None
     cta_label: str = 'Explore tanks'
     cta_url: str = '/catalogue'
+    placement: str = 'home_hero'
     active: bool = True
     sort_order: int = 0
+
+class CategoryPayload(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    slug: str = Field(min_length=2, max_length=120, pattern=r'^[a-z0-9-]+$')
+    description: str = ''
+    active: bool = True
+    sort_order: int = 0
+
+@router.get('/categories', response_model=list[CategoryPayload])
+async def list_categories(db: AsyncSession = Depends(get_async_db)):
+    return list((await db.scalars(select(Category).where(Category.active.is_(True)).order_by(Category.sort_order.asc(), Category.name.asc()))).all())
+
+@router.get('/admin/categories', dependencies=[Depends(require_admin)])
+async def admin_categories(db: AsyncSession = Depends(get_async_db)):
+    return list((await db.scalars(select(Category).order_by(Category.sort_order.asc(), Category.name.asc()))).all())
+
+@router.post('/admin/categories', response_model=CategoryPayload, status_code=201, dependencies=[Depends(require_admin)])
+async def create_category(payload: CategoryPayload, db: AsyncSession = Depends(get_async_db)):
+    if await db.scalar(select(Category).where((Category.slug == payload.slug) | (Category.name == payload.name))):
+        raise HTTPException(status_code=409, detail='Category already exists')
+    category = Category(**payload.model_dump())
+    db.add(category)
+    await db.commit()
+    await db.refresh(category)
+    return category
+
+@router.put('/admin/categories/{category_id}', response_model=CategoryPayload, dependencies=[Depends(require_admin)])
+async def update_category(category_id: int, payload: CategoryPayload, db: AsyncSession = Depends(get_async_db)):
+    category = await db.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail='Category not found')
+    for key, value in payload.model_dump().items():
+        setattr(category, key, value)
+    await db.commit()
+    await db.refresh(category)
+    return category
+
+@router.delete('/admin/categories/{category_id}', status_code=204, dependencies=[Depends(require_admin)])
+async def delete_category(category_id: int, db: AsyncSession = Depends(get_async_db)):
+    category = await db.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail='Category not found')
+    await db.delete(category)
+    await db.commit()
 
 @router.get('/banners', response_model=list[BannerPayload])
 async def list_banners(db: AsyncSession = Depends(get_async_db)):

@@ -17,11 +17,22 @@ class ProductBase(BaseModel):
 class ProductCreate(ProductBase):
     pass
 
+class ProductImageRead(BaseModel):
+    id: int
+    image_url: str
+    alt_text: str
+    sort_order: int
+    model_config = ConfigDict(from_attributes=True)
+
 class ProductRead(ProductBase):
     id: int
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class ProductDetailRead(ProductRead):
+    images: list[ProductImageRead] = []
+    related_products: list[ProductRead] = []
 
 class InquiryCreate(BaseModel):
     product_id: int | None = None
