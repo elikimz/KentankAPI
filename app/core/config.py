@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ADMIN_TOKEN: str = "change-me-in-production"
     SECRET_KEY: str = "change-me-in-production-secret"
     ADMIN_SETUP_TOKEN: str = "change-me-before-first-admin"
-    WHATSAPP_NUMBER: str = "254700000000"
+    WHATSAPP_NUMBER: str = "254743895949"
     BUSINESS_EMAIL: str = "hello@kentank.co.ke"
     BUSINESS_PHONE: str = "+254 700 000 000"
     BUSINESS_LOCATION: str = "Nairobi, Kenya"
