@@ -67,14 +67,16 @@ async def admin_product_images(product_id: int, db: AsyncSession = Depends(get_a
 
 @router.post('/admin/products/{product_id}/images', response_model=ProductImagePayload, status_code=201, dependencies=[Depends(require_admin)])
 async def add_product_image(product_id: int, payload: ProductImagePayload, db: AsyncSession = Depends(get_async_db)):
-    if not await db.get(Product, product_id): raise HTTPException(status_code=404, detail='Product not found')
-    if payload.is_primary:
-        images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
+    product = await db.get(Product, product_id)
+    if not product: raise HTTPException(status_code=404, detail='Product not found')
+    images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
+    has_primary = any(image.is_primary for image in images)
+    make_primary = payload.is_primary or (not product.image_url and not has_primary)
+    if make_primary:
         for image in images: image.is_primary = False
-    image = ProductImage(product_id=product_id, image_url=payload.image_url, alt_text=payload.alt_text, sort_order=payload.sort_order, is_primary=payload.is_primary)
+    image = ProductImage(product_id=product_id, image_url=payload.image_url, alt_text=payload.alt_text, sort_order=payload.sort_order, is_primary=make_primary)
     db.add(image)
-    if image.is_primary:
-        product = await db.get(Product, product_id)
+    if make_primary:
         product.image_url = image.image_url
     await db.commit(); await db.refresh(image)
     return image
