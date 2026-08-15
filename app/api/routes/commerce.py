@@ -71,7 +71,7 @@ async def add_product_image(product_id: int, payload: ProductImagePayload, db: A
     if payload.is_primary:
         images = list((await db.scalars(select(ProductImage).where(ProductImage.product_id == product_id))).all())
         for image in images: image.is_primary = False
-    image = ProductImage(product_id=product_id, **payload.model_dump())
+    image = ProductImage(product_id=product_id, image_url=payload.image_url, alt_text=payload.alt_text, sort_order=payload.sort_order, is_primary=payload.is_primary)
     db.add(image)
     if image.is_primary:
         product = await db.get(Product, product_id)
