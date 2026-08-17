@@ -24,7 +24,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [item.strip() for item in self.CORS_ORIGINS.split(',') if item.strip()]
+        configured = [item.strip().rstrip('/') for item in self.CORS_ORIGINS.split(',') if item.strip()]
+        required_frontends = [
+            'https://kentankclient.vercel.app',
+            'https://kentankltkenya.online',
+            'https://www.kentankltkenya.online',
+        ]
+        return list(dict.fromkeys(configured + required_frontends))
 
 @lru_cache
 def get_settings() -> Settings:
