@@ -29,6 +29,8 @@ class Settings(BaseSettings):
             'https://kentankclient.vercel.app',
             'https://kentankltkenya.online',
             'https://www.kentankltkenya.online',
+            'https://kentankmanufacturerke.online',
+            'https://www.kentankmanufacturerke.online',
         ]
         return list(dict.fromkeys(configured + required_frontends))
 
