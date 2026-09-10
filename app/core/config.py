@@ -31,6 +31,8 @@ class Settings(BaseSettings):
             'https://www.kentankltkenya.online',
             'https://kentankmanufacturerke.online',
             'https://www.kentankmanufacturerke.online',
+            'https://waterhaven.online',
+            'https://www.waterhaven.online',
         ]
         return list(dict.fromkeys(configured + required_frontends))
 
